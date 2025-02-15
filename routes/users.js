@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db/config');
+const { validateId, validateUser } = require('../middleware/validators');
 
 // Get all users
 router.get('/', async (req, res) => {
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get user by id
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateId, async (req, res) => {
     try {
         const { id } = req.params;
         const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
@@ -31,15 +32,20 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new user
-router.post('/', async (req, res) => {
+router.post('/', validateUser, async (req, res) => {
     try {
-        const { name, email } = req.body;
+        const { name, email, phone, address, city, country } = req.body;
         const result = await pool.query(
-            'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
-            [name, email]
+            `INSERT INTO users (name, email, phone, address, city, country) 
+             VALUES ($1, $2, $3, $4, $5, $6) 
+             RETURNING *`,
+            [name, email, phone, address, city, country]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
+        if (err.code === '23505') { // Unique violation
+            return res.status(409).json({ error: 'Email already exists' });
+        }
         console.error(err);
         res.status(500).json({ error: 'Internal server error' });
     }
