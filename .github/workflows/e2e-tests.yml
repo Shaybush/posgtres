@@ -1,0 +1,220 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop, secure-routes]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  e2e-tests:
+    name: E2E Tests (Node.js ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: test_express_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+
+      - name: Set up test environment
+        run: |
+          echo "NODE_ENV=test" >> $GITHUB_ENV
+          echo "PORT=8080" >> $GITHUB_ENV
+          echo "DB_HOST=localhost" >> $GITHUB_ENV
+          echo "DB_PORT=5433" >> $GITHUB_ENV
+          echo "DB_NAME=test_express_db" >> $GITHUB_ENV
+          echo "DB_USER=test_user" >> $GITHUB_ENV
+          echo "DB_PASSWORD=test_password" >> $GITHUB_ENV
+          echo "CORS_ORIGIN=http://localhost:3000" >> $GITHUB_ENV
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5433 -U test_user; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+
+      - name: Initialize test database
+        run: |
+          PGPASSWORD=test_password psql -h localhost -p 5433 -U test_user -d test_express_db -f db/init.sql
+
+      - name: Start Express server in background
+        run: |
+          npm start &
+          echo $! > server.pid
+          sleep 5
+
+      - name: Wait for server to be ready
+        run: |
+          timeout 30 bash -c 'until curl -f http://localhost:8080/health; do sleep 1; done'
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Stop Express server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+            rm server.pid
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.node-version }}
+          path: test-results/
+          retention-days: 7
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report-${{ matrix.node-version }}
+          path: test-results/html-report/
+          retention-days: 7
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'test-results/test-results.json';
+
+            if (fs.existsSync(path)) {
+              const results = JSON.parse(fs.readFileSync(path, 'utf8'));
+              const { stats } = results;
+              
+              const body = `## 🧪 E2E Test Results (Node.js ${{ matrix.node-version }})
+              
+              - ✅ **Passed**: ${stats.expected || 0}
+              - ❌ **Failed**: ${stats.unexpected || 0}
+              - ⏭️ **Skipped**: ${stats.skipped || 0}
+              - ⏱️ **Duration**: ${Math.round((stats.duration || 0) / 1000)}s
+              
+              ${stats.unexpected > 0 ? '❌ Some tests failed. Check the detailed report in the artifacts.' : '✅ All tests passed!'}
+              
+              [View detailed report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    if: always()
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level=moderate
+          npm audit --audit-level=moderate --json > audit-results.json || true
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-audit-results
+          path: audit-results.json
+          retention-days: 7
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [e2e-tests, security-audit]
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create test summary
+        run: |
+          echo "# 🧪 Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## E2E Tests" >> $GITHUB_STEP_SUMMARY
+
+          for dir in test-results-*/; do
+            if [ -d "$dir" ]; then
+              node_version=$(echo "$dir" | sed 's/test-results-//' | sed 's/\///')
+              echo "### Node.js $node_version" >> $GITHUB_STEP_SUMMARY
+              
+              if [ -f "$dir/test-results.json" ]; then
+                node -e "
+                  const fs = require('fs');
+                  const results = JSON.parse(fs.readFileSync('$dir/test-results.json', 'utf8'));
+                  const stats = results.stats;
+                  console.log('- ✅ Passed: ' + (stats.expected || 0));
+                  console.log('- ❌ Failed: ' + (stats.unexpected || 0));
+                  console.log('- ⏭️ Skipped: ' + (stats.skipped || 0));
+                  console.log('- ⏱️ Duration: ' + Math.round((stats.duration || 0) / 1000) + 's');
+                " >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- ❓ Results not available" >> $GITHUB_STEP_SUMMARY
+              fi
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "## Security Audit" >> $GITHUB_STEP_SUMMARY
+          if [ -f "security-audit-results/audit-results.json" ]; then
+            echo "- 🔍 Security audit completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❓ Security audit results not available" >> $GITHUB_STEP_SUMMARY

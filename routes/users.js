@@ -116,7 +116,7 @@ router.post('/', strictLimiter, validateUser, async (req, res) => {
 });
 
 // Update user - Apply strict rate limiting for sensitive operations
-router.put('/:id', strictLimiter, validateId, validateUser, async (req, res) => {
+router.put('/:id', validateId, validateUser, async (req, res) => {
     try {
         const { id } = req.params;
         const { name, email, phone, address, city, country } = req.body;

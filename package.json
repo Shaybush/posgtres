@@ -7,7 +7,13 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "seed": "node db/seed.js",
-    "test-rate-limit": "chmod +x test-rate-limit.sh && ./test-rate-limit.sh"
+    "test-rate-limit": "chmod +x test-rate-limit.sh && ./test-rate-limit.sh",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "test:setup": "node tests/setup/test-setup.js",
+    "test:teardown": "node tests/setup/test-teardown.js"
   },
   "dependencies": {
     "@faker-js/faker": "^8.4.1",
@@ -27,6 +33,8 @@
     "pg": "^8.11.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.0",
+    "@playwright/test": "^1.40.0",
+    "cross-env": "^7.0.3"
   }
 }

@@ -11,13 +11,13 @@ const DOMPurify = createDOMPurify(window);
 // Rate limiting configurations
 const createRateLimit = (windowMs, max, message) => {
     return rateLimit({
-        windowMs,
-        max,
-        message: { error: message },
-        standardHeaders: true,
-        legacyHeaders: false,
+        windowMs, // time window
+        max, // requests per windowMs
+        message: { error: message }, // error message
+        standardHeaders: true, // standard headers
+        legacyHeaders: false, // legacy headers
         // Skip rate limiting for successful requests only
-        skipSuccessfulRequests: false,
+        skipSuccessfulRequests: false, // skip rate limiting for successful requests only
         // Skip failed requests to prevent brute force attacks
         skipFailedRequests: false,
     });
@@ -53,8 +53,13 @@ const xssProtection = (req, res, next) => {
                     if (typeof obj[key] === 'string') {
                         // Sanitize string values to prevent XSS
                         obj[key] = DOMPurify.sanitize(obj[key], {
-                            ALLOWED_TAGS: [], // Strip all HTML tags
-                            ALLOWED_ATTR: [], // Strip all attributes
+                            /**
+                             * {
+                            *   html: <span class="test">Hello</span>
+                             * }
+                             */
+                            ALLOWED_TAGS: ['span', 'div'], // Strip all HTML tags
+                            ALLOWED_ATTR: ['class', 'id'], // Strip all attributes
                             KEEP_CONTENT: true, // Keep text content
                         });
                     } else if (typeof obj[key] === 'object' && obj[key] !== null) {
@@ -169,6 +174,9 @@ const requestSizeLimiter = (req, res, next) => {
 
 // Security headers middleware
 const securityHeaders = (req, res, next) => {
+    const secureValue = res.getHeader('X-Content-Type-Options');
+    res.removeHeader('X-Content-Type-Options');
+
     // Remove server information
     res.removeHeader('X-Powered-By');
 
@@ -192,6 +200,12 @@ module.exports = {
     requestSizeLimiter,
     securityHeaders,
     // Additional security middlewares
-    hpp: hpp(), // HTTP Parameter Pollution protection
+    hpp: hpp({
+        whitelist: [
+            'name',
+            'email',
+            'phone',
+        ],
+    }), // HTTP Parameter Pollution protection
     mongoSanitize: mongoSanitize(), // NoSQL injection protection
 }; 

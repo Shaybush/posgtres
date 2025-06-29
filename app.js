@@ -147,4 +147,11 @@ app.listen(PORT, () => {
     console.log(`   - Request size limiting: ✅`);
 });
 
-module.exports = app; 
+module.exports = app;
+
+// TODO: option 1 projects 
+// redis (cache) + mongo + react + redux + api 
+// redis (queue) + postgres + react + redux + api 
+
+// TODO: option 2 
+// unit tests(jest), e2e tests(playwright), storybook. 

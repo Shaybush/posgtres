@@ -1,2 +1,12 @@
-node_modules
+node_modules/
 .env
+
+# Test artifacts and reports
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Playwright specific
+/test-results/
+/playwright-report/
+/playwright/.cache/
