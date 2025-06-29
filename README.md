@@ -1,9 +1,13 @@
 # Writing the improved README content to a markdown (.md) file
 
 readme_content = """
+
 # 📦 Express PostgreSQL API Template with Docker
 
 A modern **Express.js** API template featuring **PostgreSQL** integration, **Docker** support, and **pure SQL** queries for user management functionality.
+
+Learn posgresql-
+https://sqlfiddle.com/
 
 ## 🚀 Features
 
@@ -38,7 +42,9 @@ pnpm install
 ```
 
 ### Configure environment variables
+
 Create an .env file inside the ./env folder with the following content:
+
 ```sh
 PORT=3000
 DB_HOST=localhost
@@ -49,10 +55,11 @@ DB_PORT=5432
 
 # PgAdmin credentials
 PGADMIN_EMAIL=admin@admin.com
-PGADMIN_PASSWORD=admin 
+PGADMIN_PASSWORD=admin
 ```
 
 ### 🐳 Docker Setup
+
 Start PostgreSQL and pgAdmin using Docker Compose:
 
 ```sh
@@ -63,13 +70,15 @@ docker-compose down
 docker-compose up -d
 ```
 
-### Insert users with faker 
+### Insert users with faker
+
 ```sh
 # seed the users collection
 pnpm run seed
 ```
 
-### run the server 
+### run the server
+
 ```sh
 pnpm run dev
 ```
