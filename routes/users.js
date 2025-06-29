@@ -51,4 +51,9 @@ router.post('/', validateUser, async (req, res) => {
     }
 });
 
+// Create new user
+router.put('/:id', validateUser, async (req, res) => {
+    // TODO: Implement update user
+});
+
 module.exports = router; 
