@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -9,6 +9,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_ADMIN_PASSWORD: ${PGADMIN_PASSWORD}
+      POSTGRES_ADMIN_USER: ${PGADMIN_EMAIL}
     ports:
       - "${DB_PORT}:5432"
     volumes:
@@ -56,4 +58,4 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data: 
+  postgres_data:
